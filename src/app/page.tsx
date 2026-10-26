@@ -2,6 +2,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
+import { useCart } from '@/context/CartContext';
 
 // ==========================================
 // 1. DATA MODELS & PRODUCTS DEFINITIONS
@@ -240,6 +242,10 @@ export default function HomePage() {
   const [contactEmail, setContactEmail] = useState('');
   const [contactMessage, setContactMessage] = useState('');
 
+  // Cart Context integration
+  const { addToCart, setCartOpen, getCartItemsCount } = useCart();
+  const cartItemsCount = getCartItemsCount();
+
   const heroRef = useRef<HTMLDivElement>(null);
 
   const activeProduct = PRODUCTS_DATA[activeCategory];
@@ -355,37 +361,47 @@ export default function HomePage() {
       <header className="w-full max-w-7xl mx-auto px-6 py-6 flex items-center justify-between z-45 relative">
         <div className="flex items-center gap-12">
           {/* Branded Logo */}
-          <button 
-            onClick={() => handleCategorySelect(0)}
+          <Link 
+            href="/"
             className="flex items-center gap-1.5 cursor-pointer font-bold text-white tracking-widest text-xl uppercase font-display"
           >
             <span className="w-3 h-3 bg-white rounded-sm inline-block" />
-            PHLOX
-          </button>
+            VELORA
+          </Link>
 
           {/* Navigation Links */}
           <nav className="hidden lg:flex items-center gap-8 text-xs text-zinc-400 font-bold uppercase tracking-widest">
-            <button onClick={() => handleCategorySelect(0)} className="hover:text-white transition-colors cursor-pointer">Home</button>
-            <button onClick={() => handleCategorySelect(1)} className="hover:text-white transition-colors cursor-pointer font-medium text-zinc-500">Shop</button>
-            <button onClick={() => handleCategorySelect(2)} className="hover:text-white transition-colors cursor-pointer">About Us</button>
-            <button onClick={() => handleCategorySelect(3)} className="hover:text-white transition-colors cursor-pointer">Blog</button>
+            <Link href="/" className="text-white transition-colors cursor-pointer">Home</Link>
+            <Link href="/collections" className="hover:text-white transition-colors cursor-pointer text-zinc-400">Shop All</Link>
+            <button onClick={() => handleCategorySelect(0)} className="hover:text-white transition-colors cursor-pointer">Footwear</button>
+            <button onClick={() => handleCategorySelect(1)} className="hover:text-white transition-colors cursor-pointer">Apparel</button>
             <button onClick={() => handleToggleTab(true)} className="hover:text-white transition-colors cursor-pointer">Contact Us</button>
           </nav>
         </div>
 
         {/* Right Corner Buttons */}
         <div className="flex items-center gap-6">
-          <button onClick={() => handleToggleTab(true)} className="text-xs font-bold text-zinc-400 hover:text-white tracking-widest uppercase cursor-pointer">login</button>
+          <Link href="/collections" className="text-xs font-bold text-zinc-400 hover:text-white tracking-widest uppercase cursor-pointer">
+            Catalog
+          </Link>
           
           {/* Search Icon */}
-          <button className="text-zinc-400 hover:text-white transition-colors cursor-pointer">
+          <Link href="/collections" className="text-zinc-400 hover:text-white transition-colors cursor-pointer" title="Search catalog">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          </button>
+          </Link>
           
           {/* Cart Icon */}
-          <button className="text-zinc-400 hover:text-white transition-colors cursor-pointer relative">
+          <button 
+            onClick={() => setCartOpen(true)}
+            className="text-zinc-400 hover:text-white transition-colors cursor-pointer relative"
+            aria-label="Open Cart Bag"
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
-            <span className="absolute -top-1.5 -right-2 bg-white text-zinc-950 font-black text-[9px] w-3.5 h-3.5 rounded-full flex items-center justify-center scale-90">1</span>
+            {cartItemsCount > 0 && (
+              <span className="absolute -top-1.5 -right-2 bg-white text-zinc-950 font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center scale-90 shadow-md">
+                {cartItemsCount}
+              </span>
+            )}
           </button>
         </div>
       </header>
@@ -428,17 +444,36 @@ export default function HomePage() {
 
             {/* Inline header inside mockup box */}
             <div className="w-full px-8 pt-6 pb-2 flex items-center justify-between z-20 [transform:translateZ(25px)]">
-              <span className="text-[10px] font-bold text-white/50 tracking-widest uppercase">| studio | phlox</span>
-              <button 
-                onClick={() => {
-                  playSound('success');
-                  alert(`Order initiated for ${activeProduct.name} - ${activeColorway.name} in ${selectedSize}!`);
-                }}
-                className="bg-white text-zinc-950 hover:bg-zinc-100 transition-all duration-300 py-2.5 px-5 rounded-full text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-lg hover:shadow-white/15"
-              >
-                Place order
-                <SvgArrowRight />
-              </button>
+              <span className="text-[10px] font-bold text-white/50 tracking-widest uppercase">| studio | velora</span>
+              <div className="flex items-center gap-3">
+                <Link
+                  href={`/products/${activeProduct.id}`}
+                  className="hidden sm:inline-flex text-xs font-bold text-zinc-300 hover:text-white uppercase tracking-wider transition-colors px-3 py-2"
+                >
+                  View Details &rarr;
+                </Link>
+                <button 
+                  onClick={() => {
+                    playSound('success');
+                    addToCart({
+                      id: `${activeProduct.id}-${selectedSize}-${activeColorway.name}`,
+                      variantId: `${activeProduct.id}-${activeColorIndex}-${selectedSize}`,
+                      title: `${activeProduct.name} (${selectedSize} / ${activeColorway.name})`,
+                      productTitle: activeProduct.name,
+                      price: '139.99',
+                      image: activeProduct.imageUrl,
+                      customAttributes: [
+                        { key: 'Size', value: selectedSize },
+                        { key: 'Color', value: activeColorway.name },
+                      ],
+                    }, 1);
+                  }}
+                  className="bg-white text-zinc-950 hover:bg-zinc-100 transition-all duration-300 py-2.5 px-5 rounded-full text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-lg hover:shadow-white/15"
+                >
+                  Add to Bag
+                  <SvgArrowRight />
+                </button>
+              </div>
             </div>
 
             {/* Main Stage */}
@@ -650,13 +685,13 @@ export default function HomePage() {
                       </div>
 
                       <div className="absolute bottom-6 right-12">
-                        <button 
-                          onClick={handleNextProduct}
+                        <Link 
+                          href="/collections"
                           className="text-white hover:text-white/80 text-xs font-semibold flex items-center gap-2 cursor-pointer transition-all hover:translate-x-1"
                         >
                           See all products
                           <SvgArrowRight />
-                        </button>
+                        </Link>
                       </div>
                     </div>
                   </motion.div>
@@ -1025,12 +1060,12 @@ export default function HomePage() {
               <p className="text-xs text-white/85 leading-relaxed">
                 Step into style with custom high-top sneakers, matching menswear apparel, active sports sets, and gym accessories discounted up to 20% for a limited time.
               </p>
-              <button 
-                onClick={() => handleCategorySelect(0)}
-                className="bg-white hover:bg-zinc-100 text-zinc-950 text-xs font-bold py-3 px-8 rounded-full cursor-pointer shadow-lg hover:shadow-white/10 transition-all duration-300 mt-2 [transform:translateZ(35px)]"
+              <Link 
+                href="/collections"
+                className="bg-white hover:bg-zinc-100 text-zinc-950 text-xs font-bold py-3 px-8 rounded-full cursor-pointer shadow-lg hover:shadow-white/10 transition-all duration-300 mt-2 [transform:translateZ(35px)] inline-block"
               >
                 Shop Now
-              </button>
+              </Link>
             </div>
 
           </div>

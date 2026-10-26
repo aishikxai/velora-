@@ -1,279 +1,363 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, useState, useMemo } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Filter, SlidersHorizontal, Search, RotateCcw } from 'lucide-react';
-import { getProducts, ShopifyProduct } from '@/lib/shopify';
-import ProductCard from '@/components/ProductCard';
-import Button from '@/components/Button';
+import { Search, SlidersHorizontal, ArrowRight, ShoppingBag, Eye, Star } from 'lucide-react';
+import Navbar from '@/components/Navbar';
+import { VELORA_PRODUCTS, VeloraProduct } from '@/data/products';
+import { useCart } from '@/context/CartContext';
 
-type CategoryFilter = 'All' | 'Jerseys' | 'Caps' | 'Mugs' | 'Gear';
+function CollectionsContent() {
+  const searchParams = useSearchParams();
+  const initialCategory = searchParams.get('category') || 'All';
 
-export default function CollectionsPage() {
-  const [products, setProducts] = useState<ShopifyProduct[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [activeCategory, setActiveCategory] = useState<string>(initialCategory);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'featured' | 'price-low' | 'price-high' | 'rating'>('featured');
+  const [quickAddedId, setQuickAddedId] = useState<string | null>(null);
 
-  // Filter States
-  const [search, setSearch] = useState('');
-  const [activeCategory, setActiveCategory] = useState<CategoryFilter>('All');
-  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
-  const [maxPrice, setMaxPrice] = useState<number>(200);
-  const [sortBy, setSortBy] = useState<string>('featured');
+  const { addToCart } = useCart();
 
-  // Fetch products on mount
-  useEffect(() => {
-    async function load() {
-      try {
-        const data = await getProducts();
-        setProducts(data);
-      } catch (e) {
-        console.error('Failed to load products on collections page:', e);
-      } finally {
-        setLoading(false);
+  const categories = ['All', 'Footwear', 'Menswear', 'Womenswear', 'Cosmetics', 'Equipment', 'Accessories'];
+
+  const filteredProducts = useMemo(() => {
+    return VELORA_PRODUCTS.filter((product) => {
+      // Category match
+      let categoryMatch = true;
+      if (activeCategory === 'Apparel') {
+        categoryMatch = product.category === 'Menswear' || product.category === 'Womenswear';
+      } else if (activeCategory !== 'All') {
+        categoryMatch = product.category.toLowerCase() === activeCategory.toLowerCase();
       }
-    }
-    load();
-  }, []);
 
-  const handleSizeToggle = (size: string) => {
-    setSelectedSizes((prev) =>
-      prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]
-    );
+      // Search match
+      const queryMatch =
+        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.category.toLowerCase().includes(searchQuery.toLowerCase());
+
+      return categoryMatch && queryMatch;
+    }).sort((a, b) => {
+      if (sortBy === 'price-low') return a.price - b.price;
+      if (sortBy === 'price-high') return b.price - a.price;
+      if (sortBy === 'rating') return b.rating - a.rating;
+      return 0; // featured
+    });
+  }, [activeCategory, searchQuery, sortBy]);
+
+  const handleQuickAdd = (e: React.MouseEvent, product: VeloraProduct) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    addToCart({
+      id: `${product.id}-${product.sizes[0] || 'standard'}`,
+      variantId: `${product.id}-default`,
+      title: `${product.name} (${product.sizes[0] || 'Standard'})`,
+      productTitle: product.name,
+      price: product.price.toString(),
+      image: product.imageUrl,
+      customAttributes: [
+        { key: 'Size', value: product.sizes[0] || 'Standard' },
+        { key: 'Color', value: product.colorways[0]?.name || 'Standard' },
+      ],
+    }, 1);
+
+    setQuickAddedId(product.id);
+    setTimeout(() => setQuickAddedId(null), 1800);
   };
-
-  const handleResetFilters = () => {
-    setSearch('');
-    setActiveCategory('All');
-    setSelectedSizes([]);
-    setMaxPrice(200);
-    setSortBy('featured');
-  };
-
-  // Filter & Sort Logic
-  const filteredProducts = products.filter((product) => {
-    const price = parseFloat(product.priceRange.minVariantPrice.amount);
-    
-    // Category match
-    const categoryMatch = activeCategory === 'All' || product.productType === activeCategory;
-    
-    // Search match
-    const searchMatch =
-      product.title.toLowerCase().includes(search.toLowerCase()) ||
-      product.description.toLowerCase().includes(search.toLowerCase());
-      
-    // Price match
-    const priceMatch = price <= maxPrice;
-    
-    // Size match: If size filter active, check if product has a variant matching that size value
-    let sizeMatch = true;
-    if (selectedSizes.length > 0) {
-      sizeMatch = product.variants.edges.some((variantEdge) =>
-        variantEdge.node.selectedOptions.some(
-          (opt) => opt.name === 'Size' && selectedSizes.includes(opt.value)
-        )
-      );
-    }
-
-    return categoryMatch && searchMatch && priceMatch && sizeMatch;
-  });
-
-  // Sorting
-  const sortedProducts = [...filteredProducts].sort((a, b) => {
-    const priceA = parseFloat(a.priceRange.minVariantPrice.amount);
-    const priceB = parseFloat(b.priceRange.minVariantPrice.amount);
-
-    if (sortBy === 'price-asc') return priceA - priceB;
-    if (sortBy === 'price-desc') return priceB - priceA;
-    return 0; // Default Featured match
-  });
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-12">
+    <div className="min-h-screen w-full bg-zinc-950 text-white flex flex-col relative font-sans selection:bg-white selection:text-zinc-950">
       
-      {/* Page header */}
-      <div className="text-center md:text-left mb-10 border-b border-border-color pb-8">
-        <span className="text-[10px] text-pitch-green uppercase font-bold tracking-widest block mb-2">
-          Loot Locker
-        </span>
-        <h1 className="font-display font-black text-4xl sm:text-5xl uppercase tracking-tight">
-          FUTGEAR Collections
-        </h1>
-        <p className="text-sm text-muted-foreground mt-2 max-w-md">
-          Equip your setup and dress your squad with our custom collections.
-        </p>
-      </div>
+      {/* Background ambient lighting */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] h-[350px] bg-red-600/10 blur-[140px] rounded-full pointer-events-none z-0" />
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+      {/* Global Navbar */}
+      <Navbar activeTab="collections" />
+
+      {/* Main Container */}
+      <main className="w-full max-w-7xl mx-auto px-6 py-8 md:py-12 z-20 flex-grow flex flex-col">
         
-        {/* LEFT COLUMN: FILTERS PANEL (Col-span 3) */}
-        <aside className="lg:col-span-3 flex flex-col gap-6 glass-panel border-border-color rounded-3xl p-6 lg:sticky lg:top-24">
-          
-          <div className="flex justify-between items-center pb-4 border-b border-border-color">
-            <span className="font-display font-bold text-sm text-foreground uppercase tracking-wider flex items-center gap-2">
-              <SlidersHorizontal size={14} className="text-pitch-green" />
-              Locker Filters
+        {/* Page Header with Strong Visual Hierarchy */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 pb-8 border-b border-white/10">
+          <div>
+            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-[0.3em] block mb-2">
+              Curated Catalog 2026
             </span>
-            <button
-              onClick={handleResetFilters}
-              className="text-[10px] uppercase font-bold text-pitch-green hover:underline flex items-center gap-1.5 cursor-pointer"
-            >
-              <RotateCcw size={10} />
-              Reset
-            </button>
-          </div>
-
-          {/* Search bar */}
-          <div className="flex flex-col gap-2">
-            <label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">
-              Search Loot
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Jersey, caps..."
-                className="w-full bg-stadium-dark/50 border border-border-color rounded-2xl pl-10 pr-4 py-3 text-xs text-foreground focus:border-pitch-green outline-none smooth-transition"
-              />
-              <Search size={14} className="absolute left-3.5 top-3.5 text-muted-foreground" />
-            </div>
-          </div>
-
-          {/* Categories select options */}
-          <div className="flex flex-col gap-2">
-            <label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">
+            <h1 className="font-display font-black text-4xl sm:text-5xl lg:text-6xl uppercase tracking-tighter text-white">
               Collections
-            </label>
-            <div className="flex flex-col gap-1.5">
-              {(['All', 'Jerseys', 'Caps', 'Mugs', 'Gear'] as CategoryFilter[]).map((cat) => (
+            </h1>
+            <p className="text-xs sm:text-sm text-zinc-400 mt-2 max-w-lg leading-relaxed">
+              Explore high-performance footwear, French flax linen apparel, studio cosmetics, and designer home ambience.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest whitespace-nowrap">
+              {filteredProducts.length} {filteredProducts.length === 1 ? 'Product' : 'Products'}
+            </span>
+            <div className="h-4 w-px bg-white/10 hidden md:block" />
+            
+            {/* Sort Dropdown */}
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="bg-zinc-900 border border-white/15 rounded-full px-4 py-2.5 text-xs font-semibold text-white focus:outline-none focus:border-white/40 cursor-pointer"
+            >
+              <option value="featured">Featured First</option>
+              <option value="price-low">Price: Low to High</option>
+              <option value="price-high">Price: High to Low</option>
+              <option value="rating">Top Rated</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Filter Bar & Search */}
+        <div className="py-6 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4">
+          
+          {/* Categories Pill Buttons */}
+          <div className="flex gap-2 overflow-x-auto pb-2 lg:pb-0 no-scrollbar">
+            {categories.map((cat) => {
+              const isActive = activeCategory.toLowerCase() === cat.toLowerCase();
+              return (
                 <button
                   key={cat}
                   onClick={() => setActiveCategory(cat)}
-                  className={`w-full text-left py-2 px-3 rounded-xl text-xs font-semibold flex justify-between items-center smooth-transition cursor-pointer ${
-                    activeCategory === cat
-                      ? 'bg-pitch-green/10 text-pitch-green border-l-2 border-pitch-green pl-4'
-                      : 'text-muted-foreground hover:bg-stadium-dark/50 hover:text-foreground'
+                  className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all duration-300 cursor-pointer ${
+                    isActive
+                      ? 'bg-white text-zinc-950 shadow-md scale-105'
+                      : 'bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5'
                   }`}
                 >
-                  {cat === 'All' ? 'All Products' : cat}
+                  {cat}
                 </button>
-              ))}
-            </div>
+              );
+            })}
           </div>
 
-          {/* Sizing Toggles (Jerseys/Caps) */}
-          <div className="flex flex-col gap-2.5">
-            <label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">
-              Size Locker
-            </label>
-            <div className="flex gap-2 flex-wrap">
-              {['S', 'M', 'L', 'XL'].map((size) => {
-                const isActive = selectedSizes.includes(size);
-                return (
-                  <button
-                    key={size}
-                    onClick={() => handleSizeToggle(size)}
-                    className={`w-10 h-10 rounded-xl font-display font-bold text-xs border flex items-center justify-center smooth-transition cursor-pointer ${
-                      isActive
-                        ? 'bg-pitch-green border-pitch-green text-matte-black'
-                        : 'bg-stadium-dark border-border-color text-foreground hover:border-foreground/20'
-                    }`}
-                  >
-                    {size}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Price Range selection slider */}
-          <div className="flex flex-col gap-2">
-            <div className="flex justify-between items-baseline">
-              <label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">
-                Max Price
-              </label>
-              <span className="font-display font-extrabold text-sm text-pitch-green">
-                ${maxPrice}
-              </span>
-            </div>
+          {/* Search Input */}
+          <div className="relative w-full lg:w-72">
             <input
-              type="range"
-              min={10}
-              max={250}
-              step={10}
-              value={maxPrice}
-              onChange={(e) => setMaxPrice(parseInt(e.target.value))}
-              className="w-full h-1 bg-stadium-dark rounded-lg appearance-none cursor-pointer accent-pitch-green outline-none"
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search products..."
+              className="w-full bg-white/5 border border-white/10 rounded-full pl-10 pr-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-white/30 transition-all"
             />
-          </div>
-
-        </aside>
-
-        {/* RIGHT COLUMN: CATALOG DISPLAY (Col-span 9) */}
-        <div className="lg:col-span-9 flex flex-col gap-6">
-          
-          {/* Controls sort by */}
-          <div className="flex justify-between items-center bg-stadium-dark/30 border border-border-color rounded-2xl px-6 py-4 flex-wrap gap-4">
-            <span className="text-xs font-semibold text-muted-foreground">
-              Showing {sortedProducts.length} of {products.length} drops
-            </span>
-
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] uppercase font-bold text-muted-foreground">Sort By</span>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="bg-stadium-dark border border-border-color rounded-xl px-4 py-2 text-xs font-semibold text-foreground focus:border-pitch-green outline-none cursor-pointer smooth-transition"
+            <Search size={14} className="absolute left-3.5 top-3.5 text-zinc-500" />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3.5 top-2.5 text-zinc-400 hover:text-white text-xs font-bold"
               >
-                <option value="featured">Featured Drops</option>
-                <option value="price-asc">Price: Low to High</option>
-                <option value="price-desc">Price: High to Low</option>
-              </select>
-            </div>
+                &times;
+              </button>
+            )}
           </div>
-
-          {/* Dynamic animating catalog grid */}
-          {loading ? (
-            <div className="h-96 flex flex-col items-center justify-center text-muted-foreground gap-4">
-              <svg className="animate-spin h-8 w-8 text-pitch-green" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              <span className="text-xs uppercase font-bold tracking-wider">Unlocking Locker...</span>
-            </div>
-          ) : sortedProducts.length === 0 ? (
-            <div className="h-96 glass-panel border-border-color rounded-3xl flex flex-col items-center justify-center text-center p-8 gap-4">
-              <span className="text-lg font-bold text-foreground">No drops matched your query</span>
-              <p className="text-xs text-muted-foreground max-w-xs mt-1">Try resetting the filters or modifying your search parameters to find setup gear.</p>
-              <Button variant="secondary" size="sm" onClick={handleResetFilters} className="mt-2">
-                Reset Locker
-              </Button>
-            </div>
-          ) : (
-            <motion.div
-              layout
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
-            >
-              <AnimatePresence>
-                {sortedProducts.map((p) => (
-                  <motion.div
-                    layout
-                    key={p.id}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    <ProductCard product={p} />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </motion.div>
-          )}
-
         </div>
 
-      </div>
+        {/* Product Grid */}
+        {filteredProducts.length === 0 ? (
+          <div className="flex-grow flex flex-col items-center justify-center py-20 text-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-zinc-900 border border-white/10 flex items-center justify-center text-zinc-500">
+              <SlidersHorizontal size={24} />
+            </div>
+            <h3 className="text-xl font-bold uppercase tracking-tight text-white">No products found</h3>
+            <p className="text-xs text-zinc-400 max-w-sm">
+              We couldn&apos;t find any items matching your selected category or search keyword.
+            </p>
+            <button
+              onClick={() => {
+                setActiveCategory('All');
+                setSearchQuery('');
+              }}
+              className="bg-white text-zinc-950 font-bold text-xs uppercase tracking-wider px-6 py-2.5 rounded-full hover:bg-zinc-200 transition-colors"
+            >
+              Reset Filters
+            </button>
+          </div>
+        ) : (
+          <motion.div 
+            layout
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 pt-4 pb-16"
+          >
+            <AnimatePresence>
+              {filteredProducts.map((product) => {
+                const colorway = product.colorways[0];
+                return (
+                  <motion.div
+                    layout
+                    key={product.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.4 }}
+                    className="group flex flex-col bg-zinc-900/70 border border-white/10 rounded-[28px] overflow-hidden hover:border-white/30 transition-all duration-500 hover:shadow-[0_20px_40px_rgba(0,0,0,0.8)]"
+                  >
+                    {/* Visual Card Media */}
+                    <Link 
+                      href={`/products/${product.slug}`}
+                      className="relative w-full aspect-[4/3] bg-zinc-900 flex items-center justify-center overflow-hidden cursor-pointer"
+                      style={{
+                        background: `radial-gradient(circle at center, ${colorway?.colorRight || '#27272a'} 0%, ${colorway?.colorLeft || '#09090b'} 100%)`
+                      }}
+                    >
+                      {/* Subtle category tag */}
+                      <span className="absolute top-4 left-4 z-10 text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white">
+                        {product.category}
+                      </span>
+
+                      {/* Rating pill */}
+                      <div className="absolute top-4 right-4 z-10 flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white">
+                        <Star size={11} className="fill-amber-400 text-amber-400" />
+                        <span>{product.rating}</span>
+                      </div>
+
+                      {/* Product Isolated Image */}
+                      <div className="w-full h-full flex items-center justify-center p-6 relative">
+                        <img
+                          src={product.imageUrl}
+                          alt={product.name}
+                          className="w-[85%] h-[85%] object-contain group-hover:scale-110 transition-transform duration-700 pointer-events-none filter drop-shadow-[0_20px_25px_rgba(0,0,0,0.65)]"
+                        />
+                      </div>
+
+                      {/* Quick Action Overlay on Desktop */}
+                      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-3">
+                        <span className="bg-white text-zinc-950 font-display font-bold text-[11px] uppercase tracking-wider px-5 py-2.5 rounded-full flex items-center gap-2 shadow-lg">
+                          <Eye size={13} />
+                          View Details
+                        </span>
+                      </div>
+                    </Link>
+
+                    {/* Card Body */}
+                    <div className="p-6 flex flex-col flex-grow justify-between">
+                      <div>
+                        {/* Title & Brand Header */}
+                        <div className="flex justify-between items-start gap-2 mb-1.5">
+                          <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                            {product.headerTextLeft}
+                          </span>
+                          {product.inStock && (
+                            <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest">
+                              In Stock
+                            </span>
+                          )}
+                        </div>
+
+                        <Link href={`/products/${product.slug}`}>
+                          <h3 className="font-display font-bold text-lg text-white hover:text-zinc-200 transition-colors line-clamp-1 uppercase tracking-tight">
+                            {product.name}
+                          </h3>
+                        </Link>
+
+                        <p className="text-xs text-zinc-400 line-clamp-2 mt-1.5 leading-relaxed font-normal">
+                          {product.description}
+                        </p>
+                      </div>
+
+                      {/* Colorways and Sizes previews */}
+                      <div className="pt-4 mt-4 border-t border-white/5 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          {product.colorways.map((cw) => (
+                            <span
+                              key={cw.hex}
+                              style={{ backgroundColor: cw.hex }}
+                              className="w-3.5 h-3.5 rounded-full border border-white/20 inline-block"
+                              title={cw.name}
+                            />
+                          ))}
+                        </div>
+                        <div className="flex gap-1">
+                          {product.sizes.slice(0, 3).map((sz) => (
+                            <span key={sz} className="text-[9px] text-zinc-500 font-bold border border-white/5 px-1.5 py-0.5 rounded">
+                              {sz}
+                            </span>
+                          ))}
+                          {product.sizes.length > 3 && (
+                            <span className="text-[9px] text-zinc-600 font-bold">
+                              +{product.sizes.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Price and CTA Placement */}
+                      <div className="flex justify-between items-center mt-5 pt-3 border-t border-white/10">
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-display font-black text-xl text-white">
+                            ${product.price.toFixed(2)}
+                          </span>
+                          {product.originalPrice && (
+                            <span className="text-xs text-zinc-500 line-through">
+                              ${product.originalPrice.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => handleQuickAdd(e, product)}
+                            className="bg-white/10 hover:bg-white text-white hover:text-zinc-950 p-2.5 rounded-full transition-all cursor-pointer"
+                            title="Add to Cart"
+                          >
+                            {quickAddedId === product.id ? (
+                              <span className="text-[10px] font-bold px-1 text-emerald-400">Added!</span>
+                            ) : (
+                              <ShoppingBag size={15} />
+                            )}
+                          </button>
+                          
+                          <Link
+                            href={`/products/${product.slug}`}
+                            className="bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs uppercase tracking-wider px-4 py-2.5 rounded-full transition-all flex items-center gap-1"
+                          >
+                            Buy
+                            <ArrowRight size={12} />
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </motion.div>
+        )}
+
+      </main>
+
+      {/* Footer */}
+      <footer className="w-full border-t border-zinc-900 bg-zinc-950 py-10 text-zinc-500 text-xs relative z-20">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 bg-white rounded-sm inline-block" />
+            <span className="font-bold tracking-wider text-zinc-300 uppercase">VELORA LUXURY</span>
+            <span>&copy; 2026. All rights reserved.</span>
+          </div>
+          <div className="flex gap-6 text-[10px] uppercase font-bold tracking-widest text-zinc-500">
+            <Link href="/" className="hover:text-white transition-colors">Home</Link>
+            <Link href="/collections" className="hover:text-white transition-colors">Catalog</Link>
+            <Link href="/#contact-section" className="hover:text-white transition-colors">Support</Link>
+          </div>
+        </div>
+      </footer>
+
     </div>
+  );
+}
+
+export default function CollectionsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen w-full bg-zinc-950 text-white flex items-center justify-center">
+        <span className="text-xs uppercase font-bold tracking-widest text-zinc-400">Loading Velora Catalog...</span>
+      </div>
+    }>
+      <CollectionsContent />
+    </Suspense>
   );
 }
