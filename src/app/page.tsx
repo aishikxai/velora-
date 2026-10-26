@@ -407,12 +407,12 @@ export default function HomePage() {
       </header>
 
       {/* ==========================================
-          1. HERO SECTION (Diagonal/Radial Split Layout)
+          1. HERO SECTION (Full-Screen Row Stage)
          ========================================== */}
-      <section ref={heroRef} className="w-full max-w-7xl mx-auto px-6 py-6 md:py-10 z-30 relative">
+      <section ref={heroRef} className="w-full px-3 sm:px-6 lg:px-8 py-2 md:py-4 z-30 relative">
         <TiltCard>
           <div 
-            className="w-full aspect-[16/9] min-h-[640px] md:min-h-[680px] bg-zinc-900 rounded-[32px] overflow-hidden shadow-[0_50px_100px_-20px_rgba(0,0,0,0.85)] border border-white/10 relative flex flex-col [transform-style:preserve-3d]"
+            className="w-full h-[85vh] min-h-[680px] max-h-[920px] bg-zinc-900 rounded-[32px] md:rounded-[40px] overflow-hidden shadow-[0_50px_100px_-20px_rgba(0,0,0,0.85)] border border-white/10 relative flex flex-col [transform-style:preserve-3d]"
           >
             {/* Inner reflection border */}
             <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none rounded-[32px] [transform:translateZ(10px)]" />
@@ -594,8 +594,8 @@ export default function HomePage() {
                       <div 
                         className={`w-full relative flex items-center justify-center [transform:translateZ(110px)] [transform-style:preserve-3d] ${
                           activeProduct.id === 'mens-apparel' || activeProduct.id === 'womens-apparel'
-                            ? 'max-w-[480px] h-[580px]' 
-                            : 'max-w-[340px] aspect-square'
+                            ? 'max-w-[540px] h-[640px]' 
+                            : 'max-w-[420px] aspect-square'
                         }`}
                       >
                         {/* Styled floor shadow */}
